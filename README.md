@@ -9,4 +9,4 @@ spark-2.3.0-bin-hadoop2.7<br/>
 # 系统版本：
 ubuntu-17.10.1-server-amd64<br/>
 # 集群信息:(Google Cloud)
-![](https://github.com/yuejinglove/RecSys/tree/master/bin/img.png) <br/>
+![](https://github.com/yuejinglove/RecSys/raw/master/bin/img.png) <br/>
