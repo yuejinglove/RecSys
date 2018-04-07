@@ -9,9 +9,10 @@ object RecSysMain {
     val conf = new SparkConf() 
     conf.setAppName("RecSys-SPARKAPP") 
         .setMaster("spark://master:7077")
-        .set("spark.executor.memory", "2g")
-        .set("spark.executor.cores", "1")
-        .set("spark.driver.memory", "2g")
+        .set("spark.executor.memory", "6g")
+        .set("spark.executor.cores", "2")
+        .set("spark.driver.memory", "24g")
+        .set("spark.driver.cores", "4")
     val sc = new SparkContext(conf) 
     sc.addJar("/home/yuehui/git/RecSys/bin/RecSys.jar")
     //最小支持度
@@ -19,18 +20,17 @@ object RecSysMain {
     //最小置信度
     val minConfidence = 0.8
     //数据分区数
-    val numPartitions = 12
+    val numPartitions = 48
     //hdfs input url 
     val inputUrl = "hdfs://master:9000/data/"
     //hdfs out url 
-    val outputUrl = "hdfs://master:9000/out/main/"
+    val outputUrl = "hdfs://master:9000/out/"
     //读取数据
     val data = sc.textFile(inputUrl + "D.dat",numPartitions)
     val user = sc.textFile(inputUrl + "U.dat",numPartitions)
     //转换为Int数组，并去重，更节省内存空间
     val transactions = data.map(line => line.trim.split(" ").map(_.toInt).distinct)
     transactions.cache()
-    
     
     //用户购买记录Set
     val usrSet = user.map(line => line.trim.split(" ").map(_.toInt).toSet)
@@ -66,7 +66,7 @@ object RecSysMain {
     //收集，便于遍历
     val rules = bestRules.collect()
     //计算用户推荐项
-    val userRecItems = usrSet.map(uSet => (rules.filter(x => x._1.subsetOf(uSet)).map(x => (x._2._1, x._2._2)).reduce((x, y) => if(x._2 > y._2) x else if (x._2 == y._2) (x._1 ++ y._1, x._2) else y)._1, uSet)).map(u => (u._1.filter(x => !u._2.contains(x)), u._2))
+    val userRecItems = usrSet.map(uSet => (rules.filter(x => x._1.subsetOf(uSet)).map(x => (x._2._1, x._2._2)), uSet)).map(u => if(u._1.isEmpty) (Set(), u._2) else (u._1.reduce((x, y) => if(x._2 > y._2) x else if (x._2 == y._2) (x._1 ++ y._1, x._2) else y)._1.filter(x => !u._2.contains(x)), u._2))
     userRecItems.cache()
     //保存格式化
     val result = userRecItems.map(item => (item._1.mkString("[", ",", "]") +" for user : " + item._2.mkString("[", ",", "]")))
