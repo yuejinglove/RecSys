@@ -1,3 +1,6 @@
+/**
+ * 主要的开发代码，其余均是测试对比优化文件
+ */
 package com.zyh.main
 import org.apache.spark.mllib.fpm.FPGrowth
 import org.apache.spark.rdd.RDD
@@ -16,15 +19,15 @@ object RecSysMain {
     val sc = new SparkContext(conf) 
     sc.addJar("/home/yuehui/git/RecSys/bin/RecSys.jar")
     //最小支持度
-    val minSupport = 0.100
+    val minSupport = 0.125
     //最小置信度
     val minConfidence = 0.80
     //数据分区数
-    val numPartitions = 200
+    val numPartitions = 120
     //hdfs input url 
     val inputUrl = "hdfs://master:9000/data/"
     //hdfs out url 
-    val outputUrl = "hdfs://master:9000/out/stand/"
+    val outputUrl = "hdfs://master:9000/out/20180411_0125_080_120/"
     //读取数据
     val data = sc.textFile(inputUrl + "D.dat",numPartitions)
     val user = sc.textFile(inputUrl + "U.dat",numPartitions)
@@ -49,11 +52,28 @@ object RecSysMain {
     val rulesList =AllAssociationRules.combineByKey(List(_), (x:List[(Array[Int], Double)], y:(Array[Int], Double)) => y :: x, (x:List[(Array[Int], Double)], y:List[(Array[Int], Double)]) => x ::: y)
     //保存关联规则与置信度[a,b] --> [ c : 0.9 ] | [ d : 0.8 ]
     rulesList.map(rule => (rule._1.mkString("[", ",", "]") + " --> " + rule._2.map(x => (x._1 + " : " + x._2.toString())).mkString("[ ", " | ", " ]"))).saveAsTextFile(outputUrl+"rulesList2") 
-    
     //用户购买记录Array
     val userArray = user.map(line => line.trim.split(" ").map(_.toInt).distinct)
     userArray.cache()
     
+    {
+      //计算置信度最高的规则，置信度相同则合并
+      val bestRules = rulesList.map(rule => (rule._1, rule._2.reduceLeft((a, b) => if(a._2 > b._2) a else if(a._2 == b._2) (a._1 ++ b._1, a._2) else b)))
+      bestRules.cache()
+      //保存关联规则中置信度最高的
+      bestRules.map(rule => rule._1.mkString("[", ",", "]") + " --> " + rule._2._1.mkString("[", ",", "]") + " : " + rule._2._2).saveAsTextFile(outputUrl + "bestRules1") 
+      
+      //收集，便于遍历
+      val rules = bestRules.collect()
+      val userRecItems = userArray.map(_.toSet).map(uSet => (rules.filter(x => x._1.subsetOf(uSet)).map(x => (x._2._1, x._2._2)), uSet)).map(u => if(u._1.isEmpty) (Array(), u._2) else (u._1.reduce((x, y) => if(x._2 > y._2) x else if (x._2 == y._2) (x._1 ++ y._1, x._2) else y)._1.filter(x => !u._2.contains(x)), u._2))
+      userRecItems.cache()
+      
+      //保存格式化
+      val result = userRecItems.map(item => (item._1.mkString("[", ",", "]")))
+      result.cache()
+      result.saveAsTextFile(outputUrl+"userRecItems")
+
+    }
     {
       //计算非聚合: 关联规则置信度到达minConfigdence即算作推荐项
       //并不需要聚合最高的RDD[(Set(前项),Array(后项))]

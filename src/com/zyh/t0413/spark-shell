@@ -1,0 +1,1 @@
+spark-shell  --master spark://master:7077 --deploy-mode client --total-executor-cores 20  --executor-memory 15G  --executor-cores 1  --driver-memory 36G 

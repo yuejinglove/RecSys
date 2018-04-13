@@ -1,0 +1,648 @@
+yuehui@master:~$ ssh gmaster 
+Welcome to Ubuntu 16.04.3 LTS (GNU/Linux 4.13.0-1012-gcp x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/advantage
+
+  Get cloud support with Ubuntu Advantage Cloud Guest:
+    http://www.ubuntu.com/business/services/cloud
+
+77 packages can be updated.
+0 updates are security updates.
+
+
+Last login: Sun Apr  8 03:00:31 2018 from 219.230.76.33
+yuehui@master:~$ clear
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+yuehui@master:~$ spark-shell  --master spark://master:7077 --deploy-mode client --total-executor-cores 20 --num-executors 20  --executor-memory 10G  --executor-cores 1  --driver-memory 60G --driver-cores 4 
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/usr/local/soft/spark/jars/slf4j-log4j12-1.7.16.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/usr/local/soft/hadoop/share/hadoop/common/lib/slf4j-log4j12-1.7.10.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [org.slf4j.impl.Log4jLoggerFactory]
+2018-04-08 03:32:46 WARN  NativeCodeLoader:62 - Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
+Setting default log level to "WARN".
+To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
+Spark context Web UI available at http://master:4040
+Spark context available as 'sc' (master = spark://master:7077, app id = app-20180408033254-0001).
+Spark session available as 'spark'.
+Welcome to
+      ____              __
+     / __/__  ___ _____/ /__
+    _\ \/ _ \/ _ `/ __/  '_/
+   /___/ .__/\_,_/_/ /_/\_\   version 2.3.0
+      /_/
+         
+Using Scala version 2.11.8 (Java HotSpot(TM) 64-Bit Server VM, Java 1.8.0_152)
+Type in expressions to have them evaluated.
+Type :help for more information.
+
+scala> import org.apache.spark.mllib.fpm.FPGrowth
+import org.apache.spark.mllib.fpm.FPGrowth
+
+scala> import org.apache.spark.rdd.RDD
+import org.apache.spark.rdd.RDD
+
+scala>    
+     | val minSupport = 0.092
+minSupport: Double = 0.092
+
+scala> val minConfidence = 0.80
+minConfidence: Double = 0.8
+
+scala> val numPartitions = 120
+numPartitions: Int = 120
+
+scala> val inputUrl = "hdfs://master:9000/data/"
+inputUrl: String = hdfs://master:9000/data/
+
+scala> val outputUrl = "hdfs://master:9000/out/0408_0092_080_120_/"
+outputUrl: String = hdfs://master:9000/out/0408_0092_080_120_/
+
+scala> val data = sc.textFile(inputUrl + "D.dat",numPartitions)
+data: org.apache.spark.rdd.RDD[String] = hdfs://master:9000/data/D.dat MapPartitionsRDD[1] at textFile at <console>:30
+
+scala> val user = sc.textFile(inputUrl + "U.dat",numPartitions)
+user: org.apache.spark.rdd.RDD[String] = hdfs://master:9000/data/U.dat MapPartitionsRDD[3] at textFile at <console>:30
+
+scala> 
+
+scala> val transactions = data.map(line => line.trim.split(" ").map(x => if (x == "") 0 else x.toInt).distinct)
+transactions: org.apache.spark.rdd.RDD[Array[Int]] = MapPartitionsRDD[4] at map at <console>:27
+
+scala> transactions.cache()
+res1: transactions.type = MapPartitionsRDD[4] at map at <console>:27
+
+scala> //用户购买记录Set
+
+scala> val usrSet = user.map(line => line.trim.split(" ").map(x => if (x == "") 0 else x.toInt).toSet)
+usrSet: org.apache.spark.rdd.RDD[scala.collection.immutable.Set[Int]] = MapPartitionsRDD[5] at map at <console>:27
+
+scala> usrSet.cache()
+res2: usrSet.type = MapPartitionsRDD[5] at map at <console>:27
+
+scala> 
+
+scala> 
+
+scala> //创建一个FPGrowth的算法实列
+
+scala> //设置计算的最小支持度和数据分区
+
+scala> val fpg = new FPGrowth().setMinSupport(minSupport).setNumPartitions(numPartitions) 
+fpg: org.apache.spark.mllib.fpm.FPGrowth = org.apache.spark.mllib.fpm.FPGrowth@71bbbb9f
+
+scala> //获得FPGrowth计算结果
+
+scala> val model = fpg.run(transactions)
+model: org.apache.spark.mllib.fpm.FPGrowthModel[Int] = org.apache.spark.mllib.fpm.FPGrowthModel@19bdfa3e
+
+scala> //收集频繁项集
+
+scala> val fre = model.freqItemsets.map(itemset => (itemset.freq, itemset.items))
+fre: org.apache.spark.rdd.RDD[(Long, Array[Int])] = MapPartitionsRDD[14] at map at <console>:27
+
+scala> fre.cache()
+res3: fre.type = MapPartitionsRDD[14] at map at <console>:27
+
+scala> //频繁项集升序排序
+
+scala> val freq = fre.sortByKey().collect
+[Stage 4:===========>                                           (24 + 20) / 120]2018-04-08 05:19:38 ERROR TaskSchedulerImpl:70 - Lost executor 11 on 10.140.0.3: Remote RPC client disassociated. Likely due to containers exceeding thresholds, or network issues. Check driver logs for WARN messages.
+2018-04-08 05:19:38 WARN  TaskSetManager:66 - Lost task 40.0 in stage 4.0 (TID 520, 10.140.0.3, executor 11): ExecutorLostFailure (executor 11 exited caused by one of the running tasks) Reason: Remote RPC client disassociated. Likely due to containers exceeding thresholds, or network issues. Check driver logs for WARN messages.
+2018-04-08 05:19:38 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_15 !
+2018-04-08 05:19:38 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_29 !
+2018-04-08 05:19:38 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_40 !
+2018-04-08 05:19:38 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_107 !
+2018-04-08 05:19:38 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_32 !
+2018-04-08 05:19:38 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_79 !
+2018-04-08 05:19:38 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_14_0 !
+2018-04-08 05:19:38 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_23 !
+2018-04-08 05:19:38 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_14_22 !
+2018-04-08 05:19:38 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_58 !
+[Stage 4:===========>                                           (26 + 20) / 120]2018-04-08 05:20:11 WARN  TaskSetManager:66 - Lost task 44.0 in stage 4.0 (TID 525, 10.140.0.3, executor 20): FetchFailed(null, shuffleId=1, mapId=-1, reduceId=44, message=
+org.apache.spark.shuffle.MetadataFetchFailedException: Missing an output location for shuffle 1
+        at org.apache.spark.MapOutputTracker$$anonfun$convertMapStatuses$2.apply(MapOutputTracker.scala:867)
+        at org.apache.spark.MapOutputTracker$$anonfun$convertMapStatuses$2.apply(MapOutputTracker.scala:863)
+        at scala.collection.TraversableLike$WithFilter$$anonfun$foreach$1.apply(TraversableLike.scala:733)
+        at scala.collection.IndexedSeqOptimized$class.foreach(IndexedSeqOptimized.scala:33)
+        at scala.collection.mutable.ArrayOps$ofRef.foreach(ArrayOps.scala:186)
+        at scala.collection.TraversableLike$WithFilter.foreach(TraversableLike.scala:732)
+        at org.apache.spark.MapOutputTracker$.convertMapStatuses(MapOutputTracker.scala:863)
+        at org.apache.spark.MapOutputTrackerWorker.getMapSizesByExecutorId(MapOutputTracker.scala:677)
+        at org.apache.spark.shuffle.BlockStoreShuffleReader.read(BlockStoreShuffleReader.scala:49)
+        at org.apache.spark.rdd.ShuffledRDD.compute(ShuffledRDD.scala:105)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD$$anonfun$7.apply(RDD.scala:337)
+        at org.apache.spark.rdd.RDD$$anonfun$7.apply(RDD.scala:335)
+        at org.apache.spark.storage.BlockManager$$anonfun$doPutIterator$1.apply(BlockManager.scala:1092)
+        at org.apache.spark.storage.BlockManager$$anonfun$doPutIterator$1.apply(BlockManager.scala:1083)
+        at org.apache.spark.storage.BlockManager.doPut(BlockManager.scala:1018)
+        at org.apache.spark.storage.BlockManager.doPutIterator(BlockManager.scala:1083)
+        at org.apache.spark.storage.BlockManager.getOrElseUpdate(BlockManager.scala:809)
+        at org.apache.spark.rdd.RDD.getOrCompute(RDD.scala:335)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:286)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.scheduler.ResultTask.runTask(ResultTask.scala:87)
+        at org.apache.spark.scheduler.Task.run(Task.scala:109)
+        at org.apache.spark.executor.Executor$TaskRunner.run(Executor.scala:345)
+        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+        at java.lang.Thread.run(Thread.java:748)
+
+)
+2018-04-08 05:20:11 WARN  TaskSetManager:66 - Lost task 46.0 in stage 4.0 (TID 527, 10.140.0.3, executor 20): FetchFailed(null, shuffleId=1, mapId=-1, reduceId=46, message=
+org.apache.spark.shuffle.MetadataFetchFailedException: Missing an output location for shuffle 1
+        at org.apache.spark.MapOutputTracker$$anonfun$convertMapStatuses$2.apply(MapOutputTracker.scala:867)
+        at org.apache.spark.MapOutputTracker$$anonfun$convertMapStatuses$2.apply(MapOutputTracker.scala:863)
+        at scala.collection.TraversableLike$WithFilter$$anonfun$foreach$1.apply(TraversableLike.scala:733)
+        at scala.collection.IndexedSeqOptimized$class.foreach(IndexedSeqOptimized.scala:33)
+        at scala.collection.mutable.ArrayOps$ofRef.foreach(ArrayOps.scala:186)
+        at scala.collection.TraversableLike$WithFilter.foreach(TraversableLike.scala:732)
+        at org.apache.spark.MapOutputTracker$.convertMapStatuses(MapOutputTracker.scala:863)
+        at org.apache.spark.MapOutputTrackerWorker.getMapSizesByExecutorId(MapOutputTracker.scala:677)
+        at org.apache.spark.shuffle.BlockStoreShuffleReader.read(BlockStoreShuffleReader.scala:49)
+        at org.apache.spark.rdd.ShuffledRDD.compute(ShuffledRDD.scala:105)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD$$anonfun$7.apply(RDD.scala:337)
+        at org.apache.spark.rdd.RDD$$anonfun$7.apply(RDD.scala:335)
+        at org.apache.spark.storage.BlockManager$$anonfun$doPutIterator$1.apply(BlockManager.scala:1092)
+        at org.apache.spark.storage.BlockManager$$anonfun$doPutIterator$1.apply(BlockManager.scala:1083)
+        at org.apache.spark.storage.BlockManager.doPut(BlockManager.scala:1018)
+        at org.apache.spark.storage.BlockManager.doPutIterator(BlockManager.scala:1083)
+        at org.apache.spark.storage.BlockManager.getOrElseUpdate(BlockManager.scala:809)
+        at org.apache.spark.rdd.RDD.getOrCompute(RDD.scala:335)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:286)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.scheduler.ResultTask.runTask(ResultTask.scala:87)
+        at org.apache.spark.scheduler.Task.run(Task.scala:109)
+        at org.apache.spark.executor.Executor$TaskRunner.run(Executor.scala:345)
+        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+        at java.lang.Thread.run(Thread.java:748)
+
+)
+[Stage 3:>                                                          (0 + 6) / 6]2018-04-08 05:22:17 WARN  TaskSetManager:66 - Lost task 40.1 in stage 4.0 (TID 524, 10.140.0.3, executor 8): FetchFailed(BlockManagerId(11, 10.140.0.3, 42957, None), shuffleId=1, mapId=15, reduceId=40, message=
+org.apache.spark.shuffle.FetchFailedException: Failed to connect to /10.140.0.3:42957
+        at org.apache.spark.storage.ShuffleBlockFetcherIterator.throwFetchFailedException(ShuffleBlockFetcherIterator.scala:519)
+        at org.apache.spark.storage.ShuffleBlockFetcherIterator.next(ShuffleBlockFetcherIterator.scala:450)
+        at org.apache.spark.storage.ShuffleBlockFetcherIterator.next(ShuffleBlockFetcherIterator.scala:61)
+        at scala.collection.Iterator$$anon$12.nextCur(Iterator.scala:434)
+        at scala.collection.Iterator$$anon$12.hasNext(Iterator.scala:440)
+        at scala.collection.Iterator$$anon$11.hasNext(Iterator.scala:408)
+        at org.apache.spark.util.CompletionIterator.hasNext(CompletionIterator.scala:32)
+        at org.apache.spark.InterruptibleIterator.hasNext(InterruptibleIterator.scala:37)
+        at org.apache.spark.util.collection.ExternalAppendOnlyMap.insertAll(ExternalAppendOnlyMap.scala:153)
+        at org.apache.spark.Aggregator.combineCombinersByKey(Aggregator.scala:50)
+        at org.apache.spark.shuffle.BlockStoreShuffleReader.read(BlockStoreShuffleReader.scala:84)
+        at org.apache.spark.rdd.ShuffledRDD.compute(ShuffledRDD.scala:105)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD$$anonfun$7.apply(RDD.scala:337)
+        at org.apache.spark.rdd.RDD$$anonfun$7.apply(RDD.scala:335)
+        at org.apache.spark.storage.BlockManager$$anonfun$doPutIterator$1.apply(BlockManager.scala:1092)
+        at org.apache.spark.storage.BlockManager$$anonfun$doPutIterator$1.apply(BlockManager.scala:1083)
+        at org.apache.spark.storage.BlockManager.doPut(BlockManager.scala:1018)
+        at org.apache.spark.storage.BlockManager.doPutIterator(BlockManager.scala:1083)
+        at org.apache.spark.storage.BlockManager.getOrElseUpdate(BlockManager.scala:809)
+        at org.apache.spark.rdd.RDD.getOrCompute(RDD.scala:335)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:286)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.scheduler.ResultTask.runTask(ResultTask.scala:87)
+        at org.apache.spark.scheduler.Task.run(Task.scala:109)
+        at org.apache.spark.executor.Executor$TaskRunner.run(Executor.scala:345)
+        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+        at java.lang.Thread.run(Thread.java:748)
+Caused by: java.io.IOException: Failed to connect to /10.140.0.3:42957
+        at org.apache.spark.network.client.TransportClientFactory.createClient(TransportClientFactory.java:245)
+        at org.apache.spark.network.client.TransportClientFactory.createClient(TransportClientFactory.java:187)
+        at org.apache.spark.network.netty.NettyBlockTransferService$$anon$2.createAndStart(NettyBlockTransferService.scala:113)
+        at org.apache.spark.network.shuffle.RetryingBlockFetcher.fetchAllOutstanding(RetryingBlockFetcher.java:141)
+        at org.apache.spark.network.shuffle.RetryingBlockFetcher.lambda$initiateRetry$0(RetryingBlockFetcher.java:169)
+        at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:511)
+        at java.util.concurrent.FutureTask.run(FutureTask.java:266)
+        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+        at io.netty.util.concurrent.DefaultThreadFactory$DefaultRunnableDecorator.run(DefaultThreadFactory.java:138)
+        ... 1 more
+Caused by: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: /10.140.0.3:42957
+        at sun.nio.ch.SocketChannelImpl.checkConnect(Native Method)
+        at sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:717)
+        at io.netty.channel.socket.nio.NioSocketChannel.doFinishConnect(NioSocketChannel.java:323)
+        at io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.finishConnect(AbstractNioChannel.java:340)
+        at io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:633)
+        at io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:580)
+        at io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:497)
+        at io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:459)
+        at io.netty.util.concurrent.SingleThreadEventExecutor$5.run(SingleThreadEventExecutor.java:858)
+        ... 2 more
+Caused by: java.net.ConnectException: Connection refused
+        ... 11 more
+
+)
+2018-04-08 05:22:27 ERROR TaskSchedulerImpl:70 - Lost executor 0 on 10.140.0.4: Remote RPC client disassociated. Likely due to containers exceeding thresholds, or network issues. Check driver logs for WARN messages.
+2018-04-08 05:22:27 WARN  TaskSetManager:66 - Lost task 4.0 in stage 3.1 (TID 532, 10.140.0.4, executor 0): ExecutorLostFailure (executor 0 exited caused by one of the running tasks) Reason: Remote RPC client disassociated. Likely due to containers exceeding thresholds, or network issues. Check driver logs for WARN messages.
+2018-04-08 05:22:27 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_44 !
+2018-04-08 05:22:27 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_14_24 !
+2018-04-08 05:22:27 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_40 !
+2018-04-08 05:22:27 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_34 !
+2018-04-08 05:22:27 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_26 !
+2018-04-08 05:22:27 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_88 !
+2018-04-08 05:22:27 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_109 !
+2018-04-08 05:22:27 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_66 !
+2018-04-08 05:22:27 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_76 !
+2018-04-08 05:22:27 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_14_13 !
+2018-04-08 05:22:27 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_20 !
+[Stage 3:>                                                          (0 + 6) / 6]2018-04-08 05:23:25 WARN  TaskSetManager:66 - Lost task 39.0 in stage 4.0 (TID 519, 10.140.0.5, executor 12): FetchFailed(BlockManagerId(11, 10.140.0.3, 42957, None), shuffleId=1, mapId=15, reduceId=39, message=
+org.apache.spark.shuffle.FetchFailedException: Failed to connect to /10.140.0.3:42957
+        at org.apache.spark.storage.ShuffleBlockFetcherIterator.throwFetchFailedException(ShuffleBlockFetcherIterator.scala:519)
+        at org.apache.spark.storage.ShuffleBlockFetcherIterator.next(ShuffleBlockFetcherIterator.scala:450)
+        at org.apache.spark.storage.ShuffleBlockFetcherIterator.next(ShuffleBlockFetcherIterator.scala:61)
+        at scala.collection.Iterator$$anon$12.nextCur(Iterator.scala:434)
+        at scala.collection.Iterator$$anon$12.hasNext(Iterator.scala:440)
+        at scala.collection.Iterator$$anon$11.hasNext(Iterator.scala:408)
+        at org.apache.spark.util.CompletionIterator.hasNext(CompletionIterator.scala:32)
+        at org.apache.spark.InterruptibleIterator.hasNext(InterruptibleIterator.scala:37)
+        at org.apache.spark.util.collection.ExternalAppendOnlyMap.insertAll(ExternalAppendOnlyMap.scala:153)
+        at org.apache.spark.Aggregator.combineCombinersByKey(Aggregator.scala:50)
+        at org.apache.spark.shuffle.BlockStoreShuffleReader.read(BlockStoreShuffleReader.scala:84)
+        at org.apache.spark.rdd.ShuffledRDD.compute(ShuffledRDD.scala:105)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD$$anonfun$7.apply(RDD.scala:337)
+        at org.apache.spark.rdd.RDD$$anonfun$7.apply(RDD.scala:335)
+        at org.apache.spark.storage.BlockManager$$anonfun$doPutIterator$1.apply(BlockManager.scala:1092)
+        at org.apache.spark.storage.BlockManager$$anonfun$doPutIterator$1.apply(BlockManager.scala:1083)
+        at org.apache.spark.storage.BlockManager.doPut(BlockManager.scala:1018)
+        at org.apache.spark.storage.BlockManager.doPutIterator(BlockManager.scala:1083)
+        at org.apache.spark.storage.BlockManager.getOrElseUpdate(BlockManager.scala:809)
+        at org.apache.spark.rdd.RDD.getOrCompute(RDD.scala:335)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:286)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.scheduler.ResultTask.runTask(ResultTask.scala:87)
+        at org.apache.spark.scheduler.Task.run(Task.scala:109)
+        at org.apache.spark.executor.Executor$TaskRunner.run(Executor.scala:345)
+        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+        at java.lang.Thread.run(Thread.java:748)
+Caused by: java.io.IOException: Failed to connect to /10.140.0.3:42957
+        at org.apache.spark.network.client.TransportClientFactory.createClient(TransportClientFactory.java:245)
+        at org.apache.spark.network.client.TransportClientFactory.createClient(TransportClientFactory.java:187)
+        at org.apache.spark.network.netty.NettyBlockTransferService$$anon$2.createAndStart(NettyBlockTransferService.scala:113)
+        at org.apache.spark.network.shuffle.RetryingBlockFetcher.fetchAllOutstanding(RetryingBlockFetcher.java:141)
+        at org.apache.spark.network.shuffle.RetryingBlockFetcher.lambda$initiateRetry$0(RetryingBlockFetcher.java:169)
+        at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:511)
+        at java.util.concurrent.FutureTask.run(FutureTask.java:266)
+        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+        at io.netty.util.concurrent.DefaultThreadFactory$DefaultRunnableDecorator.run(DefaultThreadFactory.java:138)
+        ... 1 more
+Caused by: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: /10.140.0.3:42957
+        at sun.nio.ch.SocketChannelImpl.checkConnect(Native Method)
+        at sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:717)
+        at io.netty.channel.socket.nio.NioSocketChannel.doFinishConnect(NioSocketChannel.java:323)
+        at io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.finishConnect(AbstractNioChannel.java:340)
+        at io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:633)
+        at io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:580)
+        at io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:497)
+        at io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:459)
+        at io.netty.util.concurrent.SingleThreadEventExecutor$5.run(SingleThreadEventExecutor.java:858)
+        ... 2 more
+Caused by: java.net.ConnectException: Connection refused
+        ... 11 more
+
+)
+2018-04-08 05:23:51 WARN  TaskSetManager:66 - Lost task 42.0 in stage 4.0 (TID 522, 10.140.0.7, executor 4): FetchFailed(BlockManagerId(11, 10.140.0.3, 42957, None), shuffleId=1, mapId=15, reduceId=42, message=
+org.apache.spark.shuffle.FetchFailedException: Failed to connect to /10.140.0.3:42957
+        at org.apache.spark.storage.ShuffleBlockFetcherIterator.throwFetchFailedException(ShuffleBlockFetcherIterator.scala:519)
+        at org.apache.spark.storage.ShuffleBlockFetcherIterator.next(ShuffleBlockFetcherIterator.scala:450)
+        at org.apache.spark.storage.ShuffleBlockFetcherIterator.next(ShuffleBlockFetcherIterator.scala:61)
+        at scala.collection.Iterator$$anon$12.nextCur(Iterator.scala:434)
+        at scala.collection.Iterator$$anon$12.hasNext(Iterator.scala:440)
+        at scala.collection.Iterator$$anon$11.hasNext(Iterator.scala:408)
+        at org.apache.spark.util.CompletionIterator.hasNext(CompletionIterator.scala:32)
+        at org.apache.spark.InterruptibleIterator.hasNext(InterruptibleIterator.scala:37)
+        at org.apache.spark.util.collection.ExternalAppendOnlyMap.insertAll(ExternalAppendOnlyMap.scala:153)
+        at org.apache.spark.Aggregator.combineCombinersByKey(Aggregator.scala:50)
+        at org.apache.spark.shuffle.BlockStoreShuffleReader.read(BlockStoreShuffleReader.scala:84)
+        at org.apache.spark.rdd.ShuffledRDD.compute(ShuffledRDD.scala:105)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD$$anonfun$7.apply(RDD.scala:337)
+        at org.apache.spark.rdd.RDD$$anonfun$7.apply(RDD.scala:335)
+        at org.apache.spark.storage.BlockManager$$anonfun$doPutIterator$1.apply(BlockManager.scala:1092)
+        at org.apache.spark.storage.BlockManager$$anonfun$doPutIterator$1.apply(BlockManager.scala:1083)
+        at org.apache.spark.storage.BlockManager.doPut(BlockManager.scala:1018)
+        at org.apache.spark.storage.BlockManager.doPutIterator(BlockManager.scala:1083)
+        at org.apache.spark.storage.BlockManager.getOrElseUpdate(BlockManager.scala:809)
+        at org.apache.spark.rdd.RDD.getOrCompute(RDD.scala:335)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:286)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.scheduler.ResultTask.runTask(ResultTask.scala:87)
+        at org.apache.spark.scheduler.Task.run(Task.scala:109)
+        at org.apache.spark.executor.Executor$TaskRunner.run(Executor.scala:345)
+        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+        at java.lang.Thread.run(Thread.java:748)
+Caused by: java.io.IOException: Failed to connect to /10.140.0.3:42957
+        at org.apache.spark.network.client.TransportClientFactory.createClient(TransportClientFactory.java:245)
+        at org.apache.spark.network.client.TransportClientFactory.createClient(TransportClientFactory.java:187)
+        at org.apache.spark.network.netty.NettyBlockTransferService$$anon$2.createAndStart(NettyBlockTransferService.scala:113)
+        at org.apache.spark.network.shuffle.RetryingBlockFetcher.fetchAllOutstanding(RetryingBlockFetcher.java:141)
+        at org.apache.spark.network.shuffle.RetryingBlockFetcher.lambda$initiateRetry$0(RetryingBlockFetcher.java:169)
+        at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:511)
+        at java.util.concurrent.FutureTask.run(FutureTask.java:266)
+        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+        at io.netty.util.concurrent.DefaultThreadFactory$DefaultRunnableDecorator.run(DefaultThreadFactory.java:138)
+        ... 1 more
+Caused by: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: /10.140.0.3:42957
+        at sun.nio.ch.SocketChannelImpl.checkConnect(Native Method)
+        at sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:717)
+        at io.netty.channel.socket.nio.NioSocketChannel.doFinishConnect(NioSocketChannel.java:323)
+        at io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.finishConnect(AbstractNioChannel.java:340)
+        at io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:633)
+        at io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:580)
+        at io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:497)
+        at io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:459)
+        at io.netty.util.concurrent.SingleThreadEventExecutor$5.run(SingleThreadEventExecutor.java:858)
+        ... 2 more
+Caused by: java.net.ConnectException: Connection refused
+        ... 11 more
+
+)
+[Stage 3:>                                                          (0 + 6) / 6]2018-04-08 05:24:05 ERROR TaskSchedulerImpl:70 - Lost executor 19 on 10.140.0.8: Remote RPC client disassociated. Likely due to containers exceeding thresholds, or network issues. Check driver logs for WARN messages.
+2018-04-08 05:24:05 WARN  TaskSetManager:66 - Lost task 38.0 in stage 4.0 (TID 518, 10.140.0.8, executor 19): ExecutorLostFailure (executor 19 exited caused by one of the running tasks) Reason: Remote RPC client disassociated. Likely due to containers exceeding thresholds, or network issues. Check driver logs for WARN messages.
+2018-04-08 05:24:05 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_50 !
+2018-04-08 05:24:05 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_27 !
+2018-04-08 05:24:05 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_71 !
+2018-04-08 05:24:05 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_14_15 !
+2018-04-08 05:24:05 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_87 !
+2018-04-08 05:24:05 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_19 !
+2018-04-08 05:24:05 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_35 !
+2018-04-08 05:24:05 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_104 !
+2018-04-08 05:24:05 WARN  BlockManagerMasterEndpoint:66 - No more replicas available for rdd_4_97 !
+[Stage 3:>                                                          (0 + 6) / 6]2018-04-08 05:26:08 WARN  TaskSetManager:66 - Lost task 45.0 in stage 4.0 (TID 526, 10.140.0.7, executor 5): FetchFailed(BlockManagerId(19, 10.140.0.8, 38001, None), shuffleId=1, mapId=50, reduceId=45, message=
+org.apache.spark.shuffle.FetchFailedException: Failed to connect to /10.140.0.8:38001
+        at org.apache.spark.storage.ShuffleBlockFetcherIterator.throwFetchFailedException(ShuffleBlockFetcherIterator.scala:519)
+        at org.apache.spark.storage.ShuffleBlockFetcherIterator.next(ShuffleBlockFetcherIterator.scala:450)
+        at org.apache.spark.storage.ShuffleBlockFetcherIterator.next(ShuffleBlockFetcherIterator.scala:61)
+        at scala.collection.Iterator$$anon$12.nextCur(Iterator.scala:434)
+        at scala.collection.Iterator$$anon$12.hasNext(Iterator.scala:440)
+        at scala.collection.Iterator$$anon$11.hasNext(Iterator.scala:408)
+        at org.apache.spark.util.CompletionIterator.hasNext(CompletionIterator.scala:32)
+        at org.apache.spark.InterruptibleIterator.hasNext(InterruptibleIterator.scala:37)
+        at org.apache.spark.util.collection.ExternalAppendOnlyMap.insertAll(ExternalAppendOnlyMap.scala:153)
+        at org.apache.spark.Aggregator.combineCombinersByKey(Aggregator.scala:50)
+        at org.apache.spark.shuffle.BlockStoreShuffleReader.read(BlockStoreShuffleReader.scala:84)
+        at org.apache.spark.rdd.ShuffledRDD.compute(ShuffledRDD.scala:105)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD$$anonfun$7.apply(RDD.scala:337)
+        at org.apache.spark.rdd.RDD$$anonfun$7.apply(RDD.scala:335)
+        at org.apache.spark.storage.BlockManager$$anonfun$doPutIterator$1.apply(BlockManager.scala:1092)
+        at org.apache.spark.storage.BlockManager$$anonfun$doPutIterator$1.apply(BlockManager.scala:1083)
+        at org.apache.spark.storage.BlockManager.doPut(BlockManager.scala:1018)
+        at org.apache.spark.storage.BlockManager.doPutIterator(BlockManager.scala:1083)
+        at org.apache.spark.storage.BlockManager.getOrElseUpdate(BlockManager.scala:809)
+        at org.apache.spark.rdd.RDD.getOrCompute(RDD.scala:335)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:286)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.scheduler.ResultTask.runTask(ResultTask.scala:87)
+        at org.apache.spark.scheduler.Task.run(Task.scala:109)
+        at org.apache.spark.executor.Executor$TaskRunner.run(Executor.scala:345)
+        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+        at java.lang.Thread.run(Thread.java:748)
+Caused by: java.io.IOException: Failed to connect to /10.140.0.8:38001
+        at org.apache.spark.network.client.TransportClientFactory.createClient(TransportClientFactory.java:245)
+        at org.apache.spark.network.client.TransportClientFactory.createClient(TransportClientFactory.java:187)
+        at org.apache.spark.network.netty.NettyBlockTransferService$$anon$2.createAndStart(NettyBlockTransferService.scala:113)
+        at org.apache.spark.network.shuffle.RetryingBlockFetcher.fetchAllOutstanding(RetryingBlockFetcher.java:141)
+        at org.apache.spark.network.shuffle.RetryingBlockFetcher.lambda$initiateRetry$0(RetryingBlockFetcher.java:169)
+        at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:511)
+        at java.util.concurrent.FutureTask.run(FutureTask.java:266)
+        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+        at io.netty.util.concurrent.DefaultThreadFactory$DefaultRunnableDecorator.run(DefaultThreadFactory.java:138)
+        ... 1 more
+Caused by: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: /10.140.0.8:38001
+        at sun.nio.ch.SocketChannelImpl.checkConnect(Native Method)
+        at sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:717)
+        at io.netty.channel.socket.nio.NioSocketChannel.doFinishConnect(NioSocketChannel.java:323)
+        at io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.finishConnect(AbstractNioChannel.java:340)
+        at io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:633)
+        at io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:580)
+        at io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:497)
+        at io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:459)
+        at io.netty.util.concurrent.SingleThreadEventExecutor$5.run(SingleThreadEventExecutor.java:858)
+        ... 2 more
+Caused by: java.net.ConnectException: Connection refused
+        ... 11 more
+
+)
+2018-04-08 05:26:39 WARN  TaskSetManager:66 - Lost task 37.0 in stage 4.0 (TID 517, 10.140.0.5, executor 14): FetchFailed(BlockManagerId(19, 10.140.0.8, 38001, None), shuffleId=1, mapId=13, reduceId=37, message=
+org.apache.spark.shuffle.FetchFailedException: Failed to connect to /10.140.0.8:38001
+        at org.apache.spark.storage.ShuffleBlockFetcherIterator.throwFetchFailedException(ShuffleBlockFetcherIterator.scala:519)
+        at org.apache.spark.storage.ShuffleBlockFetcherIterator.next(ShuffleBlockFetcherIterator.scala:450)
+        at org.apache.spark.storage.ShuffleBlockFetcherIterator.next(ShuffleBlockFetcherIterator.scala:61)
+        at scala.collection.Iterator$$anon$12.nextCur(Iterator.scala:434)
+        at scala.collection.Iterator$$anon$12.hasNext(Iterator.scala:440)
+        at scala.collection.Iterator$$anon$11.hasNext(Iterator.scala:408)
+        at org.apache.spark.util.CompletionIterator.hasNext(CompletionIterator.scala:32)
+        at org.apache.spark.InterruptibleIterator.hasNext(InterruptibleIterator.scala:37)
+        at org.apache.spark.util.collection.ExternalAppendOnlyMap.insertAll(ExternalAppendOnlyMap.scala:153)
+        at org.apache.spark.Aggregator.combineCombinersByKey(Aggregator.scala:50)
+        at org.apache.spark.shuffle.BlockStoreShuffleReader.read(BlockStoreShuffleReader.scala:84)
+        at org.apache.spark.rdd.ShuffledRDD.compute(ShuffledRDD.scala:105)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD$$anonfun$7.apply(RDD.scala:337)
+        at org.apache.spark.rdd.RDD$$anonfun$7.apply(RDD.scala:335)
+        at org.apache.spark.storage.BlockManager$$anonfun$doPutIterator$1.apply(BlockManager.scala:1092)
+        at org.apache.spark.storage.BlockManager$$anonfun$doPutIterator$1.apply(BlockManager.scala:1083)
+        at org.apache.spark.storage.BlockManager.doPut(BlockManager.scala:1018)
+        at org.apache.spark.storage.BlockManager.doPutIterator(BlockManager.scala:1083)
+        at org.apache.spark.storage.BlockManager.getOrElseUpdate(BlockManager.scala:809)
+        at org.apache.spark.rdd.RDD.getOrCompute(RDD.scala:335)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:286)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.rdd.MapPartitionsRDD.compute(MapPartitionsRDD.scala:38)
+        at org.apache.spark.rdd.RDD.computeOrReadCheckpoint(RDD.scala:324)
+        at org.apache.spark.rdd.RDD.iterator(RDD.scala:288)
+        at org.apache.spark.scheduler.ResultTask.runTask(ResultTask.scala:87)
+        at org.apache.spark.scheduler.Task.run(Task.scala:109)
+        at org.apache.spark.executor.Executor$TaskRunner.run(Executor.scala:345)
+        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+        at java.lang.Thread.run(Thread.java:748)
+Caused by: java.io.IOException: Failed to connect to /10.140.0.8:38001
+        at org.apache.spark.network.client.TransportClientFactory.createClient(TransportClientFactory.java:245)
+        at org.apache.spark.network.client.TransportClientFactory.createClient(TransportClientFactory.java:187)
+        at org.apache.spark.network.netty.NettyBlockTransferService$$anon$2.createAndStart(NettyBlockTransferService.scala:113)
+        at org.apache.spark.network.shuffle.RetryingBlockFetcher.fetchAllOutstanding(RetryingBlockFetcher.java:141)
+        at org.apache.spark.network.shuffle.RetryingBlockFetcher.lambda$initiateRetry$0(RetryingBlockFetcher.java:169)
+        at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:511)
+        at java.util.concurrent.FutureTask.run(FutureTask.java:266)
+        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+        at io.netty.util.concurrent.DefaultThreadFactory$DefaultRunnableDecorator.run(DefaultThreadFactory.java:138)
+        ... 1 more
+Caused by: io.netty.channel.AbstractChannel$AnnotatedConnectException: Connection refused: /10.140.0.8:38001
+        at sun.nio.ch.SocketChannelImpl.checkConnect(Native Method)
+        at sun.nio.ch.SocketChannelImpl.finishConnect(SocketChannelImpl.java:717)
+        at io.netty.channel.socket.nio.NioSocketChannel.doFinishConnect(NioSocketChannel.java:323)
+        at io.netty.channel.nio.AbstractNioChannel$AbstractNioUnsafe.finishConnect(AbstractNioChannel.java:340)
+        at io.netty.channel.nio.NioEventLoop.processSelectedKey(NioEventLoop.java:633)
+        at io.netty.channel.nio.NioEventLoop.processSelectedKeysOptimized(NioEventLoop.java:580)
+        at io.netty.channel.nio.NioEventLoop.processSelectedKeys(NioEventLoop.java:497)
+        at io.netty.channel.nio.NioEventLoop.run(NioEventLoop.java:459)
+        at io.netty.util.concurrent.SingleThreadEventExecutor$5.run(SingleThreadEventExecutor.java:858)
+        ... 2 more
+Caused by: java.net.ConnectException: Connection refused
+        ... 11 more
+
+)
+2018-04-08 05:26:48 WARN  Signaling:66 - Cancelling all active jobs, this can take a while. Press Ctrl+C again to exit now.
+org.apache.spark.SparkException: Job 2 cancelled as part of cancellation of all jobs
+  at org.apache.spark.scheduler.DAGScheduler.org$apache$spark$scheduler$DAGScheduler$$failJobAndIndependentStages(DAGScheduler.scala:1599)
+  at org.apache.spark.scheduler.DAGScheduler.handleJobCancellation(DAGScheduler.scala:1539)
+  at org.apache.spark.scheduler.DAGScheduler$$anonfun$doCancelAllJobs$1.apply$mcVI$sp(DAGScheduler.scala:735)
+  at org.apache.spark.scheduler.DAGScheduler$$anonfun$doCancelAllJobs$1.apply(DAGScheduler.scala:735)
+  at org.apache.spark.scheduler.DAGScheduler$$anonfun$doCancelAllJobs$1.apply(DAGScheduler.scala:735)
+  at scala.collection.mutable.HashSet.foreach(HashSet.scala:78)
+  at org.apache.spark.scheduler.DAGScheduler.doCancelAllJobs(DAGScheduler.scala:735)
+  at org.apache.spark.scheduler.DAGSchedulerEventProcessLoop.doOnReceive(DAGScheduler.scala:1792)
+  at org.apache.spark.scheduler.DAGSchedulerEventProcessLoop.onReceive(DAGScheduler.scala:1769)
+  at org.apache.spark.scheduler.DAGSchedulerEventProcessLoop.onReceive(DAGScheduler.scala:1758)
+  at org.apache.spark.util.EventLoop$$anon$1.run(EventLoop.scala:48)
+  at org.apache.spark.scheduler.DAGScheduler.runJob(DAGScheduler.scala:642)
+  at org.apache.spark.SparkContext.runJob(SparkContext.scala:2027)
+  at org.apache.spark.SparkContext.runJob(SparkContext.scala:2048)
+  at org.apache.spark.SparkContext.runJob(SparkContext.scala:2067)
+  at org.apache.spark.SparkContext.runJob(SparkContext.scala:2092)
+  at org.apache.spark.rdd.RDD$$anonfun$collect$1.apply(RDD.scala:939)
+  at org.apache.spark.rdd.RDDOperationScope$.withScope(RDDOperationScope.scala:151)
+  at org.apache.spark.rdd.RDDOperationScope$.withScope(RDDOperationScope.scala:112)
+  at org.apache.spark.rdd.RDD.withScope(RDD.scala:363)
+  at org.apache.spark.rdd.RDD.collect(RDD.scala:938)
+  at org.apache.spark.RangePartitioner$.sketch(Partitioner.scala:306)
+  at org.apache.spark.RangePartitioner.<init>(Partitioner.scala:168)
+  at org.apache.spark.RangePartitioner.<init>(Partitioner.scala:148)
+  at org.apache.spark.rdd.OrderedRDDFunctions$$anonfun$sortByKey$1.apply(OrderedRDDFunctions.scala:62)
+  at org.apache.spark.rdd.OrderedRDDFunctions$$anonfun$sortByKey$1.apply(OrderedRDDFunctions.scala:61)
+  at org.apache.spark.rdd.RDDOperationScope$.withScope(RDDOperationScope.scala:151)
+  at org.apache.spark.rdd.RDDOperationScope$.withScope(RDDOperationScope.scala:112)
+  at org.apache.spark.rdd.RDD.withScope(RDD.scala:363)
+  at org.apache.spark.rdd.OrderedRDDFunctions.sortByKey(OrderedRDDFunctions.scala:61)
+  ... 49 elided
+
+scala> :q
+
+
