@@ -1,5 +1,12 @@
 /**
  * 实现通过共享变量（broadcast）进行每个executor的推荐计算
+ * 广播通过两个方面提高数据共享效率：
+ * 1，集群中每个节点（物理机器）只有一个副本，默认的闭包是每个任务一个副本；
+ * 2，广播传输是通过BT下载模式实现的，也就是P2P下载，在集群多的情况下，可以极大的提高数据传输速率。广播变量修改后，不会反馈到其他节点。
+ * 初始的时候，就在Drvier上有一份副本。task在运行的时候，想要使用广播变量中的数据，此时首先会在自己本地的Executor对应的
+ * BlockManager中，尝试获取变量副本；如果本地没有，BlockManager，也许会从远程的Driver上面去获取变量副本；也有可能从距离比较近的其他
+ * 节点的Executor的BlockManager上去获取，并保存在本地的BlockManager中；BlockManager负责管理某个Executor对应的内存和磁盘上的数据，
+ * 此后这个executor上的task，都会直接使用本地的BlockManager中的副本。
  */
 package cn.edu.njust.main
 import org.apache.spark.mllib.fpm.FPGrowth
